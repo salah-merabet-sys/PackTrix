@@ -1,0 +1,25 @@
+# MANIFEST.in — controls which files are included in the source distribution
+# (the .tar.gz that pip downloads when you run: pip install packtrix)
+
+# Always include these top-level files
+include README.md
+include LICENSE
+include pyproject.toml
+include requirements.txt
+include CHANGELOG.md
+
+# Include all Python source files under packtrix/
+recursive-include packtrix *.py
+
+# Include the plugins subdirectory explicitly
+recursive-include packtrix/plugins *.py
+
+# Exclude compiled bytecode and caches — never ship these
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.egg-info
+global-exclude .DS_Store
+
+# Exclude tests from the installed package
+# (they are in the sdist for developers but not installed by pip)
+prune tests

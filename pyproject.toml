@@ -1,0 +1,155 @@
+[build-system]
+requires      = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+# ── Project metadata (PEP 621) ────────────────────────────────────────────────
+
+[project]
+name            = "packtrix"
+version         = "0.1.4"
+description     = "A modular, terminal-based Python cybersecurity toolkit for network discovery, packet capture, and real-time threat detection."
+readme          = "README.md"
+license         = "MIT"
+authors         = [{ name = "Packtrix Contributors" }]
+keywords        = ["cybersecurity", "network", "packet-capture", "arp-scan", "port-scan", "terminal", "cli"]
+requires-python = ">=3.10"
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Information Technology",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Networking :: Monitoring",
+    "Topic :: Utilities",
+]
+
+# ── Runtime dependencies ──────────────────────────────────────────────────────
+#
+# Zero third-party packages required for demo / placeholder mode.
+# Every command works out of the box using the Python standard library:
+#
+#   argparse, socket, ipaddress, re, os, sys, shutil, signal,
+#   threading, queue, select, tty, termios, csv, json, logging,
+#   logging.handlers, datetime, dataclasses, pathlib, textwrap,
+#   importlib, pkgutil, collections, concurrent.futures
+#
+dependencies = []
+
+# ── Optional dependency groups ────────────────────────────────────────────────
+
+[project.optional-dependencies]
+
+# Live capture — real ARP scanning and packet capture
+# Usage: pip install "packtrix[live]"
+# Requires root / sudo for capture operations
+live = [
+    "scapy>=2.5.0",       # ARP sweep, live sniff, pcap read/write
+    "netifaces>=0.11.0",  # Reliable cross-platform NIC address enumeration
+]
+
+# Development tools — testing, linting, type checking
+# Usage: pip install "packtrix[dev]"
+dev = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+    "freezegun>=1.4.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+]
+
+# Everything — live + dev
+# Usage: pip install "packtrix[all]"
+all = [
+    "scapy>=2.5.0",
+    "netifaces>=0.11.0",
+    "pytest>=8.0.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+    "freezegun>=1.4.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+]
+
+# ── Console scripts ───────────────────────────────────────────────────────────
+
+[project.scripts]
+packtrix = "packtrix.cli:main"
+
+# ── Project URLs ──────────────────────────────────────────────────────────────
+
+[project.urls]
+Homepage      = "https://github.com/your-org/packtrix"
+Repository    = "https://github.com/your-org/packtrix"
+Issues        = "https://github.com/your-org/packtrix/issues"
+Documentation = "https://github.com/your-org/packtrix#readme"
+Changelog     = "https://github.com/your-org/packtrix/blob/main/CHANGELOG.md"
+
+# ── Package discovery ─────────────────────────────────────────────────────────
+
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["packtrix*"]
+exclude = ["tests*", "*.egg-info"]
+
+# ── Ruff (linter + formatter) ─────────────────────────────────────────────────
+
+[tool.ruff]
+line-length    = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = [
+    "E501",   # line too long — handled per file
+    "B006",   # mutable default args — intentional in utils helpers
+    "SIM108", # ternary rewrites — readability preference
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]   # assert is fine in tests
+
+# ── Mypy (static type checking) ───────────────────────────────────────────────
+
+[tool.mypy]
+python_version         = "3.10"
+strict                 = false
+ignore_missing_imports = true   # scapy / netifaces have no bundled stubs
+warn_unused_ignores    = true
+warn_return_any        = false
+
+# ── Pytest ────────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short"
+markers   = [
+    "slow: marks tests as slow (deselect with -m 'not slow')",
+    "live: marks tests that require root and Scapy",
+]
+
+# ── Coverage ──────────────────────────────────────────────────────────────────
+
+[tool.coverage.run]
+source  = ["packtrix"]
+omit    = ["packtrix/__main__.py", "tests/*", "*/plugins/rules/*"]
+branch  = true
+
+[tool.coverage.report]
+show_missing  = true
+skip_covered  = false
+fail_under    = 60
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]

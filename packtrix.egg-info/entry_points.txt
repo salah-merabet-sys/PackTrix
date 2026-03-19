@@ -1,0 +1,2 @@
+[console_scripts]
+packtrix = packtrix.cli:main

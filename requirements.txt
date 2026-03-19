@@ -1,0 +1,53 @@
+# ============================================================
+# Packtrix v0.1.4 — Python dependencies
+# ============================================================
+#
+# DEMO MODE  (zero extra packages needed)
+# ----------------------------------------
+# All four commands — scan, sniff, analyze, dashboard — run
+# on the Python standard library alone with realistic simulated
+# data.  No root, no Scapy, no third-party packages required.
+#
+# Standard library modules used:
+#   argparse, socket, ipaddress, re, os, sys, shutil, signal,
+#   threading, queue, select, tty, termios, csv, json, logging,
+#   logging.handlers, datetime, dataclasses, pathlib, textwrap,
+#   importlib, pkgutil, collections, concurrent.futures
+#
+# LIVE MODE  (optional extras)
+# ----------------------------------------
+# Install these to capture real traffic and enumerate NICs:
+#
+#   pip install scapy netifaces
+#   sudo packtrix sniff eth0
+#   sudo packtrix scan 192.168.1.0/24 --ports
+#
+# Or use the packaged extras:
+#
+#   pip install "packtrix[live]"    # scapy + netifaces
+#   pip install "packtrix[dev]"     # testing + linting tools
+#   pip install "packtrix[all]"     # everything
+#
+# ── Live capture (optional) ───────────────────────────────────────────────────
+
+# Real ARP scanning, live packet capture, pcap read/write
+# Requires root / CAP_NET_RAW for all capture operations
+scapy>=2.5.0
+
+# Reliable cross-platform NIC address enumeration
+# Falls back to /proc/net/dev (Linux) or socket module without this
+netifaces>=0.11.0
+
+# ── Development and testing ───────────────────────────────────────────────────
+
+# Test runner
+pytest>=8.0.0
+
+# Mock fixtures for pytest
+pytest-mock>=3.12.0
+
+# Freeze time.time() for deterministic sliding-window tests
+freezegun>=1.4.0
+
+# Coverage reporting  (pytest --cov=packtrix)
+pytest-cov>=4.1.0
