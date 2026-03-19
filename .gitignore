@@ -1,0 +1,26 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+.env/
+
+# Logs / temp
+*.log
+*.tmp
+*.bak
+
+# IDEs
+.vscode/
+.idea/
+
+# Packtrix / plugins cache
+plugins/__pycache__/
+tests/__pycache__/
+
+# Secrets
+config/*.env
+
+# Python packaging info
+packtrix.egg-info/
