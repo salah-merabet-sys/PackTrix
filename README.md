@@ -1,7 +1,8 @@
-Packtrix
+# 🛡️ Packtrix
 
 > A modular, terminal-based Python cybersecurity toolkit.
-> Network discovery · Packet capture · Threat detection · Live dashboard
+> Network discovery · Multi-type port scanning · Deep packet inspection
+> Threat detection · Live flicker-free dashboard
 
 **Version 0.1.4** · Zero runtime dependencies · Works out of the box
 
@@ -39,12 +40,12 @@ packtrix --help
 
 | Module | Description |
 |---|---|
-| **scanner** | ARP host discovery + threaded TCP port scan with banner grabbing and OUI vendor lookup |
-| **sniffer** | Live packet capture with protocol filter, scrolling table, Ctrl+C to stop and summary on exit |
-| **analyzer** | 7 detection rules + plugin autodiscovery system — just drop a file in `plugins/` |
-| **dashboard** | Flicker-free in-place terminal dashboard with scroll, pause, clear, and reset keys |
-| **logger** | Structured logging with JSON / CSV / TXT export and UTC timestamps |
-| **_display** | Shared ANSI primitives and `CursorUI` in-place renderer — the reason there's no flicker |
+| **scanner** | ARP + ICMP discovery · SYN/connect/FIN/NULL/XMAS/UDP port scans · OS fingerprinting · service version detection · traceroute |
+| **sniffer** | Live packet capture · full BPF filter support · HTTP/DNS/TLS/ARP deep inspection · TCP stream reassembly · ARP spoof detection |
+| **analyzer** | 7 detection rules + plugin autodiscovery — drop a file in `plugins/` and it loads automatically |
+| **dashboard** | Flicker-free in-place terminal dashboard — protocol chart, top talkers, scrollable packet feed, live alerts, active connections |
+| **logger** | Structured logging · JSON/CSV/TXT export with UTC timestamps |
+| **_display** | Shared ANSI primitives and `CursorUI` in-place renderer (zero third-party deps) |
 
 ---
 
@@ -52,56 +53,42 @@ packtrix --help
 
 | Requirement | Notes |
 |---|---|
-| Python **3.10+** | Uses `X \| Y` union types and match syntax |
-| Linux / macOS | Raw socket support needed for live capture |
+| Python **3.10+** | Uses `X \| Y` union types |
+| Linux / macOS | Raw socket support for live features |
 | **No runtime dependencies** | Runs entirely on the Python standard library |
 
 ### Optional — live mode
 
 | Package | What it enables |
 |---|---|
-| `scapy >= 2.5.0` | Real ARP scanning, live capture, pcap read/write |
+| `scapy >= 2.5.0` | All scan types · live capture · pcap I/O |
 | `netifaces >= 0.11.0` | Reliable NIC address enumeration |
 
 ```bash
 pip install "packtrix[live]"
 sudo packtrix sniff eth0
+sudo packtrix scan 192.168.1.0/24 --ports --scan-type syn
 ```
 
 ---
 
 ## Installation
 
-### From PyPI
-
 ```bash
+# From PyPI
 pip install packtrix
-```
 
-### From source
-
-```bash
+# From source
 git clone https://github.com/your-org/packtrix.git
 cd packtrix
-python3 -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
-```
 
-### With live capture support
-
-```bash
+# With live capture support
 pip install "packtrix[live]"
-# or from source:
-pip install -e ".[live]"
-```
 
-### With dev tools
-
-```bash
+# With dev tools
 pip install "packtrix[dev]"
-# or:
-pip install -e ".[dev]"
 ```
 
 ---
@@ -113,12 +100,14 @@ pip install -e ".[dev]"
 packtrix scan 192.168.1.0/24
 packtrix scan 192.168.1.0/24 --ports
 packtrix sniff eth0 --filter tcp --count 30
+packtrix sniff eth0 --deep
 packtrix analyze --demo
 packtrix dashboard
 
 # Live mode — needs sudo + scapy
-sudo packtrix scan 192.168.1.0/24 --ports --output results.json
-sudo packtrix sniff wlan0 --filter tcp
+sudo packtrix scan 192.168.1.0/24 --ports --scan-type syn --os --services
+sudo packtrix scan 192.168.1.0/24 --ports --scan-type fin   # firewall evasion
+sudo packtrix sniff eth0 --bpf "tcp port 443" --deep
 sudo packtrix dashboard --interface wlan0 --refresh 0.5
 ```
 
@@ -128,74 +117,121 @@ sudo packtrix dashboard --interface wlan0 --refresh 0.5
 
 ### `scan`
 
-Discover live hosts via ARP, look up vendor from MAC OUI table, and
-optionally TCP-scan common ports (22, 80, 443) with banner grabbing.
+Full network discovery pipeline with multiple scan techniques.
 
 ```
-packtrix scan <network> [--ports] [--output FILE] [-v]
+packtrix scan <network> [options]
 ```
 
 | Flag | Default | Description |
 |---|---|---|
 | `<network>` | required | CIDR subnet — e.g. `192.168.1.0/24` |
-| `--ports` | off | Enable TCP port scan (22, 80, 443) with banner grabbing |
-| `--output FILE` | — | Save results — format inferred from `.json` or `.csv` |
-| `-v` | off | Verbose / debug logging |
+| `--ports` | off | Enable TCP port scan |
+| `--scan-type TYPE` | `syn` | `syn` · `connect` · `fin` · `null` · `xmas` |
+| `--udp` | off | Run UDP port scan (root required) |
+| `--os` | off | OS fingerprinting per host (root required) |
+| `--services` | off | Service version detection on open ports |
+| `--icmp` | off | ICMP ping sweep instead of ARP for discovery |
+| `--traceroute` | off | Trace network path to each host |
+| `--ports-list PORTS` | — | Custom ports: `22,80,443` or `8000-8090` |
+| `--output FILE` | — | Save results — `.json` or `.csv` |
+| `-v` | off | Verbose logging |
+
+**Scan types explained:**
+
+| Type | How | Root | Speed | Stealth |
+|---|---|---|---|---|
+| `syn` | Half-open — SYN only, no handshake | Yes | Fast | High |
+| `connect` | Full TCP handshake via OS | No | Medium | Low |
+| `fin` | FIN flag — RFC 793 evasion | Yes | Fast | High |
+| `null` | No flags set — RFC 793 evasion | Yes | Fast | High |
+| `xmas` | FIN+PSH+URG — RFC 793 evasion | Yes | Fast | High |
 
 ```bash
+# ARP only
 packtrix scan 192.168.1.0/24
-packtrix scan 192.168.1.0/24 --ports
-packtrix scan 192.168.1.0/24 --ports --output results.json
-packtrix scan 10.0.0.0/24 --output hosts.csv
+
+# SYN scan + OS + service detection
+sudo packtrix scan 192.168.1.0/24 --ports --os --services
+
+# Firewall evasion
+sudo packtrix scan 192.168.1.0/24 --ports --scan-type fin
+
+# Full scan: everything
+sudo packtrix scan 192.168.1.0/24 --ports --udp --os --services --traceroute
+
+# Custom ports, save to CSV
+sudo packtrix scan 192.168.1.0/24 --ports --ports-list 22,80,443,8080-8090 --output scan.csv
 ```
 
 ---
 
 ### `sniff`
 
-Stream decoded packets to the terminal in a live scrolling table.
-Each row shows timestamp, source → destination, protocol, service,
-size, and TCP flags. Prints a summary on exit.
+Live packet capture with deep protocol inspection.
 
 ```
-packtrix sniff <interface> [--filter PROTO] [--count N] [--output FILE] [-v]
+packtrix sniff <interface> [options]
 ```
 
 | Flag | Default | Description |
 |---|---|---|
 | `<interface>` | required | NIC name — e.g. `eth0`, `wlan0` |
-| `--filter PROTO` | all | `tcp`, `udp`, or `icmp` |
-| `--count N` | unlimited | Stop automatically after N packets |
+| `--filter PROTO` | all | `tcp` `udp` `icmp` `arp` `dns` |
+| `--bpf EXPR` | — | Full BPF expression — overrides `--filter` |
+| `--count N` | unlimited | Stop after N packets |
+| `--deep` | off | Enable HTTP/DNS/TLS/ARP deep inspection |
+| `--duration SECS` | — | Capture for N seconds then exit |
 | `--output FILE` | — | Save to `.pcap` (Scapy) or `.json` fallback |
 | `-v` | off | Verbose logging |
 
-```bash
-packtrix sniff eth0
-packtrix sniff wlan0 --filter tcp
-packtrix sniff eth0 --filter udp --count 100
-packtrix sniff eth0 --count 500 --output capture.pcap
+**Deep inspection (`--deep`) shows a second line per packet:**
+```
+│  3 │ 14:03:07.412 │ 192.168.1.42:54891 │ 8.8.8.8:80  │ TCP  │ GET /   │
+  ↳ HTTP GET example.com/index.html
+
+│  4 │ 14:03:07.687 │ 192.168.1.10:51234 │ 8.8.8.8:53  │ UDP  │ DNS     │
+  ↳ DNS query A google.com
+  ↳ DNS answer google.com → 142.250.80.46
+
+│  5 │ 14:03:08.001 │ 192.168.1.99:43210 │ bank.com:443│ TCP  │ TLS     │
+  ↳ TLS ClientHello TLS 1.2 SNI=bank.com
 ```
 
-Press **Ctrl+C** to stop at any time.
+```bash
+# All traffic
+packtrix sniff eth0
+
+# TCP only, 100 packets
+packtrix sniff eth0 --filter tcp --count 100
+
+# Full BPF filter
+sudo packtrix sniff eth0 --bpf "tcp port 443"
+sudo packtrix sniff eth0 --bpf "host 192.168.1.1 and not arp"
+
+# Deep inspection
+sudo packtrix sniff eth0 --deep
+
+# Background capture 30 seconds
+sudo packtrix sniff eth0 --duration 30 --output session.pcap
+```
 
 ---
 
 ### `analyze`
 
-Read a packet log file (or the built-in demo dataset) and run all
-detection rules. Prints a colour-coded alert table sorted by severity.
+Run all detection rules over a packet log file.
 
 ```
-packtrix analyze [<logfile>] [--demo] [--export FMT] [--export-path DIR] [-v]
+packtrix analyze [<logfile>] [--demo] [--export FMT] [--export-path DIR]
 ```
 
 | Flag | Default | Description |
 |---|---|---|
 | `<logfile>` | — | Path to `.json`, `.jsonl`, or `.csv` capture file |
-| `--demo` | off | Use built-in placeholder dataset — no file needed |
+| `--demo` | off | Use built-in placeholder dataset |
 | `--export FMT` | — | Export alerts: `json` or `csv` |
 | `--export-path DIR` | `.` | Directory for exported files |
-| `-v` | off | Verbose logging |
 
 ```bash
 packtrix analyze --demo
@@ -203,59 +239,35 @@ packtrix analyze logs/capture.json
 packtrix analyze logs/capture.json --export json --export-path reports/
 ```
 
-Built-in rules (always run): brute-force, port scan, traffic spike.
-Auto-loaded plugins: dns_tunneling, icmp_flood, cleartext_creds, arp_spoof.
-
 ---
 
 ### `dashboard`
 
-Full-screen live terminal dashboard. Uses `CursorUI` in-place line
-replacement so there is zero flicker — only lines that changed are
-rewritten on each refresh.
+Full-screen live terminal dashboard — zero flicker.
 
 ```
-packtrix dashboard [--interface IFACE] [--refresh SECS] [-v]
+packtrix dashboard [--interface IFACE] [--refresh SECS]
 ```
 
 | Flag | Default | Description |
 |---|---|---|
-| `--interface IFACE` | `eth0` | NIC name shown in the header |
-| `--refresh SECS` | `1.0` | Redraw interval in seconds (min `0.2`) |
-| `-v` | off | Verbose logging |
-
-```bash
-packtrix dashboard
-packtrix dashboard --interface wlan0
-packtrix dashboard --interface eth0 --refresh 0.5
-```
+| `--interface IFACE` | `eth0` | NIC name shown in header |
+| `--refresh SECS` | `1.0` | Redraw interval (min `0.2`) |
 
 **Keyboard shortcuts:**
 
 | Key | Action |
 |---|---|
 | `q` | Quit |
-| `p` | Pause / resume packet feed |
-| `c` | Clear the alerts panel |
-| `r` | Reset all counters and logs |
+| `p` | Pause / resume |
+| `c` | Clear alerts |
+| `r` | Reset all stats |
 | `↑` or `k` | Scroll packet feed up |
 | `↓` or `j` | Scroll packet feed down |
 
-**Six panels:**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  PACKTRIX  eth0  up 00:01:23  1,482 pkts  2.3 p/s  14:03:07│
-├───────────────────────────┬─────────────────────────────────┤
-│  Protocol Distribution    │  Top Talkers                    │
-│  TCP ████████  55%  812   │  1. 192.168.1.5  ████  342      │
-├───────────────────────────┼─────────────────────────────────┤
-│  Recent Packets  1-8/142  │  Alerts  3                      │
-│  14:03:07 10.0.0.1>…:443  │  [CRIT] BRUTE_FORCE 10.0.0.5   │
-├───────────────────────────┴─────────────────────────────────┤
-│  Active Connections                                          │
-└─────────────────────────────────────────────────────────────┘
-[q] quit  [p] pause  [c] clear  [r] reset  [↑↓] scroll
+```bash
+packtrix dashboard
+packtrix dashboard --interface wlan0 --refresh 0.5
 ```
 
 ---
@@ -263,15 +275,18 @@ packtrix dashboard --interface eth0 --refresh 0.5
 ## Project structure
 
 ```
-Packtrix/                              7,466 lines across 25 source files
+Packtrix/                              ~9,800 lines · v0.1.4
 │
 ├── packtrix/
 │   ├── __init__.py                    20   Package metadata, version 0.1.4
 │   ├── __main__.py                     3   Enables python -m packtrix
 │   ├── _display.py                   223   Shared ANSI helpers, CursorUI renderer
-│   ├── cli.py                        931   argparse CLI, 4 sub-commands
-│   ├── scanner.py                    241   ARP discovery, threaded port scan
-│   ├── sniffer.py                    428   Packet capture, live table, Ctrl+C exit
+│   ├── cli.py                        662   argparse CLI — all commands and flags
+│   ├── scanner.py                   1080   ARP/ICMP discovery · SYN/connect/FIN/
+│   │                                       NULL/XMAS/UDP scans · OS fingerprint
+│   │                                       · service detect · traceroute
+│   ├── sniffer.py                   1319   Live capture · BPF filters · HTTP/DNS/
+│   │                                       TLS/ARP deep inspection · TCP reassembly
 │   ├── analyzer.py                  1035   Detection rules, plugin autodiscovery
 │   ├── dashboard.py                  574   Flicker-free in-place dashboard
 │   ├── logger.py                     878   Structured logging, CSV/JSON/TXT export
@@ -281,7 +296,7 @@ Packtrix/                              7,466 lines across 25 source files
 │       ├── __init__.py                13
 │       ├── base.py                   218   AlertResult dataclass, ABC
 │       ├── registry.py               325   PluginRegistry
-│       ├── dns_tunneling.py           95   High-rate DNS query detection
+│       ├── dns_tunneling.py           95   High-rate DNS detection
 │       ├── icmp_flood.py              80   Ping flood detection
 │       ├── cleartext_creds.py        112   Plaintext credential detection
 │       └── rules/
@@ -312,28 +327,91 @@ Packtrix/                              7,466 lines across 25 source files
 ### `packtrix.scanner`
 
 ```python
-from packtrix.scanner import scan_network, arp_scan, port_scan
+from packtrix.scanner import (
+    scan_network,     # full pipeline
+    arp_scan,         # ARP host discovery
+    icmp_sweep,       # ICMP ping sweep
+    connect_scan,     # TCP connect (no root)
+    syn_scan,         # TCP SYN stealth (root)
+    udp_scan,         # UDP scan (root)
+    fin_scan,         # TCP FIN evasion (root)
+    null_scan,        # TCP NULL evasion (root)
+    xmas_scan,        # TCP XMAS evasion (root)
+    port_scan,        # unified port scan (picks type)
+    service_detect,   # version detection per port
+    os_fingerprint,   # OS detection per host
+    traceroute,       # ICMP traceroute
+)
 
-# Full pipeline: discover + optional port scan + print table
-hosts = scan_network("192.168.1.0/24", scan_ports=True)
-# → list[dict]: {ip, mac, hostname, vendor,
-#                ports: [{port, state, service, banner}]}
+# Full pipeline
+hosts = scan_network(
+    "192.168.1.0/24",
+    scan_ports   = True,
+    scan_type    = "syn",      # syn connect fin null xmas
+    do_os        = True,
+    do_services  = True,
+    do_udp       = True,
+    custom_ports = [22, 80, 443, 8080],
+)
 
+# Individual scan types
 hosts   = arp_scan("192.168.1.0/24")
-results = port_scan("192.168.1.1", ports=[22, 80, 443, 8080])
+live    = icmp_sweep("192.168.1.0/24")
+results = syn_scan("192.168.1.1", ports=[22, 80, 443])
+results = connect_scan("192.168.1.1")          # no root needed
+results = udp_scan("192.168.1.1")
+results = fin_scan("192.168.1.1")
+svc     = service_detect("192.168.1.1", 443)  # → {version, banner, tls_version}
+fp      = os_fingerprint("192.168.1.1")       # → {os, confidence, ttl, window}
+hops    = traceroute("8.8.8.8", max_hops=20)
 ```
 
 ### `packtrix.sniffer`
 
 ```python
-from packtrix.sniffer import capture_packets, save_pcap, load_pcap
+from packtrix.sniffer import (
+    capture_packets,       # live capture with display
+    stream_capture,        # background capture, no display
+    parse_packet,          # decode raw Scapy packet
+    inspect_http,          # HTTP request/response parser
+    inspect_dns,           # DNS wire format parser
+    inspect_tls,           # TLS handshake metadata
+    inspect_arp,           # ARP spoof detection
+    TCPStreamReassembler,  # TCP byte stream reassembly
+    save_pcap, load_pcap,
+)
 
-packets = capture_packets("eth0", filter="tcp", packet_limit=50)
-# → list[dict]: {timestamp, src_ip, dst_ip, src_port, dst_port,
-#                protocol, service, size, flags, info}
+# Live capture — all options
+packets = capture_packets(
+    "eth0",
+    filter       = "tcp",
+    packet_limit = 100,
+    deep_inspect = True,         # HTTP/DNS/TLS/ARP inspection
+    bpf_filter   = "port 443",   # full BPF overrides filter
+)
 
-save_pcap(packets, "session.pcap")   # wrpcap → falls back to JSON
-packets = load_pcap("session.pcap")  # rdpcap → falls back to JSON
+# Background non-blocking capture
+packets = stream_capture("eth0", duration=30.0)
+
+# Deep inspection functions
+http = inspect_http(payload_bytes)
+# → {method, url, host, status, headers, body_preview}
+
+dns  = inspect_dns(udp_payload_bytes)
+# → {transaction_id, is_response, questions, answers}
+
+tls  = inspect_tls(tcp_payload_bytes)
+# → {tls_version, handshake_type, sni, ciphers}
+
+arp_table = {}
+alert = inspect_arp(pkt, arp_table)
+# → Alert dict if MAC changed for known IP, else None
+
+# TCP stream reassembly
+rs = TCPStreamReassembler()
+for pkt in packets:
+    data = rs.add(pkt)   # returns bytes when stream is contiguous
+streams = rs.get_all_streams()   # {(src,sport,dst,dport): bytes}
 ```
 
 ### `packtrix.analyzer`
@@ -341,12 +419,9 @@ packets = load_pcap("session.pcap")  # rdpcap → falls back to JSON
 ```python
 from packtrix.analyzer import analyze_logs
 
-alerts = analyze_logs("logs/capture.json")
-alerts = analyze_logs("__placeholder__")    # built-in demo data
-alerts = analyze_logs(
-    "capture.json", export="csv", export_path="reports/"
-)
-# → list[Alert]: .severity .alert_type .src_ip .event_count .detail
+alerts = analyze_logs("__placeholder__")   # demo data
+alerts = analyze_logs("capture.json")
+alerts = analyze_logs("capture.json", export="csv", export_path="reports/")
 ```
 
 ### `packtrix.logger`
@@ -354,19 +429,9 @@ alerts = analyze_logs(
 ```python
 from packtrix.logger import (
     setup_logger, log_event,
-    export_scan_results, export_alerts, export_packets, generate_report,
+    export_scan_results, export_alerts,
+    export_packets, generate_report,
 )
-
-setup_logger("scanner", log_file="session.log", rotate=True)
-log_event("SCAN_START", level="INFO", module="scanner",
-          detail={"subnet": "192.168.1.0/24"})
-
-export_scan_results(results, "scan.json",   fmt="json")
-export_scan_results(results, "scan.csv",    fmt="csv")
-export_alerts(alerts,        "alerts.json", fmt="json")
-export_alerts(alerts,        "alerts.txt",  fmt="txt")   # narrative report
-export_packets(packets,      "cap.csv",     fmt="csv")   # adds UTC datetime
-paths = generate_report(results, alerts, output_dir="reports/session1")
 ```
 
 ### `packtrix._display`
@@ -377,83 +442,46 @@ from packtrix._display import (
     term_size, CursorUI,
     BOLD, DIM, GRY, WHT, CYN, GREEN, YEL, RED,
 )
-
-# Colour + reset
-print(c("error", BOLD, RED))
-
-# ANSI-aware pad — coloured strings align correctly in tables
-print(pad(c("coloured text", CYN), width=20))
-
-# Horizontal bar
-print(bar(filled=30, total=100, width=20, fill_col=CYN))
-
-# In-place renderer — only rewrites lines that changed
-ui = CursorUI(height=24)
-ui.enter()
-while running:
-    ui.draw(build_frame())   # list[str] of length 24
-    time.sleep(1.0)
-ui.leave()
 ```
 
 ---
 
 ## Plugin system
 
-Drop a Python file with a `detect(packets)` function into
-`packtrix/plugins/` — it is found and run automatically on the next
-`analyze` call. No registration, no imports, no config changes.
-
-### Minimal example
+Drop a `.py` file in `packtrix/plugins/` with a `detect(packets)` function.
+It runs automatically on the next `packtrix analyze` call.
 
 ```python
 # packtrix/plugins/my_rule.py
 
-THRESHOLD = 10
-
 def detect(packets: list[dict]) -> list[dict]:
-    """Detect something suspicious."""
     alerts = []
-    # ... your logic ...
-    alerts.append({
-        "alert_type":  "MY_RULE",
-        "severity":    "HIGH",       # CRITICAL HIGH MEDIUM LOW INFO
-        "src_ip":      "10.0.0.1",
-        "dst_ip":      "",
-        "dst_port":    None,
-        "event_count": 12,
-        "detail":      "12 suspicious events in 60s",
-        "rule":        "my_rule",
-    })
+    for pkt in packets:
+        if pkt.get("dst_port") == 4444:   # Metasploit default
+            alerts.append({
+                "alert_type":  "METASPLOIT_PORT",
+                "severity":    "CRITICAL",
+                "src_ip":      pkt["src_ip"],
+                "dst_ip":      pkt["dst_ip"],
+                "dst_port":    4444,
+                "event_count": 1,
+                "detail":      f"Traffic to known Metasploit port",
+                "rule":        "my_rule",
+            })
     return alerts
 ```
 
-### Plugin contract
-
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `alert_type` | str | ✓ | Uppercase label, e.g. `"MY_RULE"` |
-| `severity` | str | ✓ | `CRITICAL` `HIGH` `MEDIUM` `LOW` `INFO` |
-| `src_ip` | str | ✓ | Source IP that triggered the alert |
-| `dst_ip` | str | | Empty string if not applicable |
-| `dst_port` | int\|None | | Destination port or None |
-| `event_count` | int | ✓ | Events that fired the rule |
-| `detail` | str | ✓ | Human-readable description |
-| `rule` | str | | Auto-filled from filename if omitted |
-
-Return `Alert` dataclass instances or plain dicts — both accepted.
-
-### Bundled plugins
+**Bundled plugins:**
 
 | File | Detects | Threshold |
 |---|---|---|
-| `dns_tunneling.py` | High-rate DNS queries from one source | 50/60s → MEDIUM · 200/60s → HIGH |
-| `icmp_flood.py` | Ping flood by packet rate | 100/5s → HIGH · 500/5s → CRITICAL |
-| `cleartext_creds.py` | FTP · HTTP Basic Auth · SMTP AUTH · IMAP LOGIN | always HIGH |
-| `rules/arp_spoof.py` | ARP reply conflicts known IP→MAC table | always HIGH |
-| `rules/brute_force.py` | Many SYN packets to auth ports | 5/60s → MEDIUM · 20/60s → CRITICAL |
-| `rules/port_scan.py` | Rapid unique-port probing | 10/10s → MEDIUM · 50/10s → HIGH |
-| `rules/traffic_spike.py` | Per-IP traffic vs cross-IP mean | 3× → MEDIUM · 10× → CRITICAL |
+| `dns_tunneling.py` | High-rate DNS queries | 50/60s → MEDIUM |
+| `icmp_flood.py` | Ping flood | 100/5s → HIGH |
+| `cleartext_creds.py` | FTP/HTTP/SMTP/IMAP plaintext | always HIGH |
+| `rules/arp_spoof.py` | ARP reply MAC conflict | always HIGH |
+| `rules/brute_force.py` | SYN to auth ports | 5/60s → MEDIUM |
+| `rules/port_scan.py` | Rapid port probing | 10/10s → MEDIUM |
+| `rules/traffic_spike.py` | Per-IP traffic anomaly | 3× mean → MEDIUM |
 
 ---
 
@@ -463,55 +491,35 @@ Return `Alert` dataclass instances or plain dicts — both accepted.
 
 | Rule | Algorithm | Default threshold |
 |---|---|---|
-| **Brute-force** | Sliding window over SYN packets to auth ports (22, 21, 23, 3389, 5900, 6379) | ≥ 5 per 60 s |
-| **Port scan** | Sliding window tracking unique destination ports per source IP | ≥ 10 ports per 10 s |
-| **Traffic spike** | Per-IP packet count vs cross-IP mean (needs ≥ 3 source IPs) | ≥ 3× mean AND ≥ 20 pkts |
-
-Tune thresholds at the top of `analyzer.py`:
-
-```python
-BRUTE_FORCE_THRESHOLD = 5       # SYN attempts to fire
-BRUTE_FORCE_WINDOW_S  = 60.0
-PORT_SCAN_THRESHOLD   = 10      # unique ports to fire
-PORT_SCAN_WINDOW_S    = 10.0
-SPIKE_MIN_PACKETS     = 20
-SPIKE_MULTIPLIER      = 3.0
-```
+| **Brute-force** | Sliding window over SYN to auth ports | ≥ 5 per 60 s |
+| **Port scan** | Sliding window unique destination ports | ≥ 10 ports per 10 s |
+| **Traffic spike** | Per-IP packet count vs cross-IP mean | ≥ 3× mean AND ≥ 20 pkts |
 
 ### Alert severity
 
 | Level | Colour | Used for |
 |---|---|---|
-| `CRITICAL` | Bold red | SYN flood, credential leak, 10× traffic spike |
-| `HIGH` | Red | ARP spoof, ICMP flood, cleartext creds, aggressive port scan |
-| `MEDIUM` | Yellow | Port scan, moderate brute-force, DNS tunneling |
+| `CRITICAL` | Bold red | SYN flood, credential leak, 10× spike |
+| `HIGH` | Red | ARP spoof, ICMP flood, cleartext creds |
+| `MEDIUM` | Yellow | Port scan, brute-force, DNS tunneling |
 | `LOW` | Green | Low-confidence anomaly |
-| `INFO` | Grey | Discovery events, scan start/stop |
+| `INFO` | Grey | Discovery events |
 
 ---
 
 ## Exporting results
 
 ```bash
-# Scan — nested JSON or flattened CSV (one row per ip × port)
+# Scan — JSON or flattened CSV
 packtrix scan 192.168.1.0/24 --ports --output scan.json
 packtrix scan 192.168.1.0/24 --ports --output scan.csv
 
 # Alerts
 packtrix analyze logs/capture.json --export json --export-path reports/
-packtrix analyze logs/capture.json --export csv  --export-path reports/
 
-# Capture — pcap (Scapy) or JSON fallback
+# Capture — pcap or JSON fallback
 packtrix sniff eth0 --count 500 --output session.pcap
-```
-
-Programmatic session bundle:
-
-```python
-from packtrix.logger import generate_report
-paths = generate_report(scan_results, alerts, output_dir="reports/session1")
-# Writes: scan_results.json  scan_results.csv
-#         alerts.json  alerts.csv  alerts.txt  session.log
+packtrix sniff eth0 --duration 30 --output session.json
 ```
 
 ---
@@ -519,38 +527,26 @@ paths = generate_report(scan_results, alerts, output_dir="reports/session1")
 ## Running tests
 
 ```bash
-# All tests — no root or Scapy needed
 pytest tests/ -v
-
-# Single module
 pytest tests/test_analyzer.py -v
-
-# With coverage
 pytest tests/ --cov=packtrix --cov-report=term-missing
 ```
+
+All tests run without root or Scapy.
 
 ---
 
 ## Publishing
 
-See [PUBLISHING.md](PUBLISHING.md) for the full step-by-step guide.
-
-Quick reference:
+See [PUBLISHING.md](PUBLISHING.md) for the full guide.
 
 ```bash
-# Install build tools
 pip install build twine
-
-# Build
 python3 -m build
-
-# Check
 twine check dist/*
-
-# Upload to PyPI
 twine upload dist/*
 
-# Anyone can then install with:
+# Anyone can then install:
 pip install packtrix
 pip install "packtrix[live]"
 ```
@@ -560,12 +556,12 @@ pip install "packtrix[live]"
 ## Roadmap
 
 - [ ] `--daemon` mode — background monitoring with alert webhooks
-- [ ] HTML report export with embedded charts
-- [ ] GeoIP annotation for external IP addresses
-- [ ] Plugin hot-reload — watch `plugins/` and reload on file change
+- [ ] HTML report export with charts
+- [ ] GeoIP annotation for external IPs
+- [ ] Plugin hot-reload
 - [ ] Windows support via Npcap
-- [ ] HTTPS certificate anomaly detection
-- [ ] Rogue DHCP server detection
+- [ ] TLS certificate anomaly detection
+- [ ] Wireless / 802.11 monitor mode support
 
 ---
 
@@ -573,11 +569,11 @@ pip install "packtrix[live]"
 
 Packtrix is intended for use only on networks you own or have explicit
 written permission to test. Unauthorised network scanning and packet
-interception may be illegal in your jurisdiction. The authors accept no
-liability for misuse.
+interception may be illegal in your jurisdiction. The authors accept
+no liability for misuse.
 
 ---
 
 ## License
 
-MIT © Packtrix Salah Merabet — see [LICENSE](LICENSE)
+MIT © Packtrix Contributors — see [LICENSE](LICENSE)

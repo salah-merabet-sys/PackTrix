@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name            = "packtrix"
 version         = "0.1.4"
-description     = "A modular, terminal-based Python cybersecurity toolkit for network discovery, packet capture, and real-time threat detection."
+description     = "A modular, terminal-based Python cybersecurity toolkit — network discovery, multi-type port scanning, deep packet inspection, threat detection, and a live flicker-free dashboard."
 readme          = "README.md"
 license         = "MIT"
 authors         = [{ name = "Packtrix Contributors" }]

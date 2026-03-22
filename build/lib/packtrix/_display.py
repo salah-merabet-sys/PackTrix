@@ -55,12 +55,28 @@ def pad(text: str, width: int, align: str = "<") -> str:
     """
     Pad *text* to *width* visible characters.
     align: '<' left  '>' right  '^' centre
-    Truncates with '…' if already too long.
+
+    Truncation walks character-by-character, preserving ANSI codes so
+    coloured strings keep their colour after being clipped.
     """
     v = vlen(text)
     if v > width:
-        plain = _ANSI.sub("", text)
-        return plain[:max(0, width - 1)] + "…"
+        target  = max(0, width - 1)
+        result  = []
+        visible = 0
+        i       = 0
+        while i < len(text):
+            m = _ANSI.match(text, i)
+            if m:
+                result.append(m.group())
+                i += len(m.group())
+            else:
+                if visible >= target:
+                    break
+                result.append(text[i])
+                visible += 1
+                i += 1
+        return "".join(result) + RST + "\u2026"
     spaces = width - v
     if align == ">":
         return " " * spaces + text

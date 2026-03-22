@@ -24,3 +24,5 @@ config/*.env
 
 # Python packaging info
 packtrix.egg-info/
+build/
+PUBLISHING.md
